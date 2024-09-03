@@ -34,8 +34,18 @@ git clone https://github.com/jaeaeich/vpn.git
 - **Move the script and dependencies**:
 
 ```sh
-mv vpn-manager/vpn.sh ~/bin/vpn/
-chmod +x ~/bin/vpn/vpn.sh
+# Ensure ~/bin exists
+mkdir -p ~/bin
+# Create the target directory for your script inside ~/bin
+mkdir -p ~/bin/vpn-script
+# Move the contents of the cloned repository to the ~/bin/vpn-script directory
+mv vpn/* ~/bin/vpn-script
+# Remove the empty 'vpn' directory after moving its contents
+rmdir vpn
+# Create a symbolic link to the script, so it can be invoked with 'vpn'
+ln -s ~/bin/vpn-script/vpn.sh ~/bin/vpn
+# Make sure the script is executable
+chmod +x ~/bin/vpn-script/vpn.sh
 ```
 
 - **Make the script available as a command**:
