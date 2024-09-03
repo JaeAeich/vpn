@@ -64,7 +64,12 @@ if [[ "$STATE" == "running" ]]; then
   echo "Waiting for the instance to stop..."
   while [[ "$STATE" != "stopped" ]]; do
     sleep 10
-    STATE="$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[].Instances[].State.Name" --output text --region $REGION)"
+    STATE=$(aws ec2 describe-instances \
+      --instance-ids $INSTANCE_ID \
+      --filters "Name=tag:Name,Values=openvpn" \
+      --query "Reservations[].Instances[].State.Name" \
+      --output text \
+      --region $REGION)
     echo "Current instance state: $STATE"
   done
 
