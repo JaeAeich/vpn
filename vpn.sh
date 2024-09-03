@@ -1,6 +1,6 @@
 #!/bin/env bash
 #
-# vpn.sh - A script to manage OpenVPN connections on ec2
+# vpn.sh - A script to manage OpenVPN connections on EC2
 #
 # Copyright (C) 2024 Javed Habib (jaeaeich) <jh4official@gmail.com>
 #
@@ -17,15 +17,31 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-# Define the AWS region
+# Configuration
 REGION="ap-southeast-1"
-
-# Define the path to the OpenVPN client config filters
 PROFILE_NAME="client.ovpn"
 CURR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 PATH_TO_OVPN_CLIENT_CONFIG="$CURR_DIR/$PROFILE_NAME"
+INSTANCE_NAME="openvpn"
 
-# Check if the OpenVPN client config file exists
+# Helper function to get instance state
+get_instance_state() {
+  aws ec2 describe-instances \
+    --instance-ids "$INSTANCE_ID" \
+    --query "Reservations[].Instances[].State.Name" \
+    --output text \
+    --region "$REGION"
+}
+
+# Helper function to check for errors
+check_for_error() {
+  if [ -z "$1" ] || [ "$1" == "None" ]; then
+    echo "Error: $2"
+    exit 1
+  fi
+}
+
+# Ensure the OpenVPN client config file exists
 if [ ! -f "$PATH_TO_OVPN_CLIENT_CONFIG" ]; then
   echo "Error: OpenVPN client config file not found at $PATH_TO_OVPN_CLIENT_CONFIG."
   exit 1
@@ -34,25 +50,22 @@ fi
 # Get the instance ID for the instance with the name 'openvpn'
 INSTANCE_ID=$(aws ec2 describe-instances \
   --region "$REGION" \
-  --filters "Name=tag:Name,Values=openvpn" \
+  --filters "Name=tag:Name,Values=$INSTANCE_NAME" \
   --query "Reservations[].Instances[].InstanceId" \
   --output text)
 
-# If instance is already runnning, inform and quit
-STATE=$(aws ec2 describe-instances \
-  --instance-ids $INSTANCE_ID \
-  --filters "Name=tag:Name,Values=openvpn" \
-  --query "Reservations[].Instances[].State.Name" \
-  --output text \
-  --region $REGION)
+check_for_error "$INSTANCE_ID" "No instance ID found for the instance with name '$INSTANCE_NAME'."
+
+# Get the current instance state
+STATE=$(get_instance_state)
 
 if [[ "$STATE" == "running" ]]; then
   echo "Did you forget to stop EC2? ooh the bill!!!"
   echo "Shutting down OpenVPN server..."
 
   # Attempt to stop the instance
-  STOP_OUTPUT="$(aws ec2 stop-instances --instance-ids $INSTANCE_ID --output text --region $REGION)"
-  STOP_STATUS="$(echo $STOP_OUTPUT | grep 'stopping')"
+  STOP_OUTPUT=$(aws ec2 stop-instances --instance-ids "$INSTANCE_ID" --output text --region "$REGION")
+  STOP_STATUS=$(echo "$STOP_OUTPUT" | grep 'stopping')
 
   if [ -n "$STOP_STATUS" ]; then
     echo "Stop request successful. The instance is now in the process of stopping."
@@ -64,12 +77,7 @@ if [[ "$STATE" == "running" ]]; then
   echo "Waiting for the instance to stop..."
   while [[ "$STATE" != "stopped" ]]; do
     sleep 10
-    STATE=$(aws ec2 describe-instances \
-      --instance-ids $INSTANCE_ID \
-      --filters "Name=tag:Name,Values=openvpn" \
-      --query "Reservations[].Instances[].State.Name" \
-      --output text \
-      --region $REGION)
+    STATE=$(get_instance_state)
     echo "Current instance state: $STATE"
   done
 
@@ -82,29 +90,14 @@ if [[ "$STATE" != "stopped" ]]; then
   exit 1
 fi
 
-aws ec2 start-instances \
-  --instance-ids $INSTANCE_ID \
-  --output text \
-  --region $REGION
+# Start the instance
+aws ec2 start-instances --instance-ids "$INSTANCE_ID" --output text --region "$REGION"
 
-# Check if INSTANCE_ID is empty
-if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
-  echo "Error: No instance ID found for the instance with name 'openvpn'."
-  exit 1
-fi
-
-echo "Instance ID: $INSTANCE_ID"
-
-# Wait for the EC2 instance to boot up
+# Wait for the instance to boot up
 echo "Waiting for the instance to start..."
 while [[ "$STATE" != "running" ]]; do
   sleep 10
-  STATE=$(aws ec2 describe-instances \
-    --instance-ids $INSTANCE_ID \
-    --filters "Name=tag:Name,Values=openvpn" \
-    --query "Reservations[].Instances[].State.Name" \
-    --output text \
-    --region $REGION)
+  STATE=$(get_instance_state)
   echo "Current instance state: $STATE"
 done
 
@@ -115,28 +108,22 @@ INSTANCE_PUBLIC_IP=$(aws ec2 describe-instances \
   --query "Reservations[].Instances[].PublicIpAddress" \
   --output text)
 
-# Check if INSTANCE_PUBLIC_IP is empty
-if [ -z "$INSTANCE_PUBLIC_IP" ] || [ "$INSTANCE_PUBLIC_IP" == "None" ] || [ "$INSTANCE_PUBLIC_IP" == " " ]; then
-  echo "Error: No public IP address found for instance ID $INSTANCE_ID."
-  exit 1
-fi
+check_for_error "$INSTANCE_PUBLIC_IP" "No public IP address found for instance ID $INSTANCE_ID."
 
 echo "Public IP Address: $INSTANCE_PUBLIC_IP"
 
 # Extract the previous IP from the client config file
 PREV_IP=$(grep remote "$PATH_TO_OVPN_CLIENT_CONFIG" | head -n 1 | awk '{print $2}')
 
-# Check if PREV_IP was found
-if [ -z "$PREV_IP" ] || ["$PREV_IP" == " " ]; then
-  echo "Error: No previous IP address found in the OpenVPN client config file."
-  exit 1
-fi
+check_for_error "$PREV_IP" "No previous IP address found in the OpenVPN client config file."
 
 # Replace the previous IP with the new IP in the config file
 sed -i "s/$PREV_IP/$INSTANCE_PUBLIC_IP/g" "$PATH_TO_OVPN_CLIENT_CONFIG"
 
 # Start the OpenVPN session using the updated config
 # Note: Replace USERNAME and PASSWORD with actual value
+USERNAME=my_username
+PASSWORD=my_password
 printf "$USERNAME\n$PASSWORD\n" | openvpn3 session-start --config "$PATH_TO_OVPN_CLIENT_CONFIG"
 
 echo "OpenVPN session started successfully."
