@@ -22,7 +22,8 @@ REGION="ap-southeast-1"
 
 # Define the path to the OpenVPN client config filters
 PROFILE_NAME="client.ovpn"
-PATH_TO_OVPN_CLIENT_CONFIG="$(pwd)/$PROFILE_NAME"
+CURR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+PATH_TO_OVPN_CLIENT_CONFIG="$CURR_DIR/$PROFILE_NAME"
 
 # Check if the OpenVPN client config file exists
 if [ ! -f "$PATH_TO_OVPN_CLIENT_CONFIG" ]; then
