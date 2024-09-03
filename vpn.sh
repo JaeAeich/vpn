@@ -125,5 +125,3 @@ sed -i "s/$PREV_IP/$INSTANCE_PUBLIC_IP/g" "$PATH_TO_OVPN_CLIENT_CONFIG"
 USERNAME=my_username
 PASSWORD=my_password
 printf "$USERNAME\n$PASSWORD\n" | openvpn3 session-start --config "$PATH_TO_OVPN_CLIENT_CONFIG"
-
-echo "OpenVPN session started successfully."
