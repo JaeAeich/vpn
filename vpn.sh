@@ -17,12 +17,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-# Configuration
-REGION="ap-southeast-1"
-PROFILE_NAME="client.ovpn"
+# Determine the location of the .vpnrc file
+if [ -d "$HOME/.config" ] && [ -f "$HOME/.config/vpn/.vpnrc" ]; then
+    VPNRC_FILE="$HOME/.config/vpn/.vpnrc"
+    source "$VPNRC_FILE"
+elif [ -f "$HOME/.vpnrc" ]; then
+    VPNRC_FILE="$HOME/.vpnrc"
+    source "$VPNRC_FILE"
+else
+    echo "Info: .vpnrc file not found in either ~/.config/vpn/ or ~/"
+    echo "Proceeding with default values.."
+
+    # Default configuration
+    REGION="ap-southeast-1"
+    PROFILE_NAME="client.ovpn"
+    INSTANCE_NAME="openvpn"
+    USERNAME=openvpn
+    PASSWORD=my_password
+fi
+
+# Path to ovpn profile
 CURR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 PATH_TO_OVPN_CLIENT_CONFIG="$CURR_DIR/$PROFILE_NAME"
-INSTANCE_NAME="openvpn"
 
 # Helper function to get instance state
 get_instance_state() {
@@ -121,7 +137,4 @@ check_for_error "$PREV_IP" "No previous IP address found in the OpenVPN client c
 sed -i "s/$PREV_IP/$INSTANCE_PUBLIC_IP/g" "$PATH_TO_OVPN_CLIENT_CONFIG"
 
 # Start the OpenVPN session using the updated config
-# Note: Replace USERNAME and PASSWORD with actual value
-USERNAME=my_username
-PASSWORD=my_password
 printf "$USERNAME\n$PASSWORD\n" | openvpn3 session-start --config "$PATH_TO_OVPN_CLIENT_CONFIG"
